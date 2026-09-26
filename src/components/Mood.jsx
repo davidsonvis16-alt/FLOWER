@@ -3,12 +3,21 @@ import { MOODS, PRODUCTS } from '../data.js';
 import { beforeCutoff, img, kes } from '../lib.js';
 import { useShop } from '../shop.jsx';
 
+// how the florist writes the card; `cls` picks the font in styles.css
+const SCRIPTS = [
+  { id: 'hand', label: 'Handwritten', cls: 'w-hand' },
+  { id: 'script', label: 'Script', cls: 'w-script' },
+  { id: 'classic', label: 'Classic', cls: 'w-classic' },
+  { id: 'typed', label: 'Typewriter', cls: 'w-typed' },
+];
+
 export default function Mood() {
   const { addToCart } = useShop();
   const [id, setId] = useState('love');
   const [shownImg, setShownImg] = useState(MOODS[0].img);
   const [swapping, setSwapping] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [script, setScript] = useState(SCRIPTS[0]);
   const msgRef = useRef();
   const m = MOODS.find(x => x.id === id);
   const p = PRODUCTS.find(x => x.id === m.product);
@@ -32,7 +41,7 @@ export default function Mood() {
   const send = () => {
     const text = msgRef.current.textContent.trim();
     addToCart({ key: `${p.id}-M-${m.id}-${Date.now()}`, id: p.id, name: p.name, img: p.img, price: p.price,
-      meta: `Size M · Card: “${text.slice(0, 60)}${text.length > 60 ? '…' : ''}”` });
+      meta: `Size M · ${script.label} card: “${text.slice(0, 60)}${text.length > 60 ? '…' : ''}”` });
   };
 
   return (
@@ -52,11 +61,18 @@ export default function Mood() {
             <div className="cap"><div className="hand">{m.title}</div><p>{m.desc}</p></div>
           </div>
           <div className="side">
-            <div className="note">
+            <div className={'note ' + script.cls}>
               <span className="to">Card message · written by our florist, by hand</span>
-              <button className="edit" onClick={toggleEdit}>{editing ? 'Done' : 'Edit message'}</button>
-              <div className="msg" ref={msgRef} contentEditable={editing} suppressContentEditableWarning spellCheck={false} />
+              <div className="msg" ref={msgRef} contentEditable={editing} suppressContentEditableWarning spellCheck={false} aria-label="Card message" />
               <div className="sig">{m.sig}</div>
+              <div className="note-foot">
+                <div className="scripts" role="radiogroup" aria-label="Writing style">
+                  {SCRIPTS.map(s => (
+                    <button key={s.id} className={'script ' + s.cls} role="radio" aria-checked={s.id === script.id} onClick={() => setScript(s)}>{s.label}</button>
+                  ))}
+                </div>
+                <button className="edit" onClick={toggleEdit}>{editing ? 'Done' : 'Edit message'}</button>
+              </div>
             </div>
             <div className="pick">
               <div className="th"><img src={img(p.img)} alt="" /></div>

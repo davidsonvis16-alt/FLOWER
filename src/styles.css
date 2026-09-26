@@ -12,6 +12,8 @@
 @font-face{font-family:"Instrument";src:url(/fonts/instrument-regular.woff2) format("woff2");font-style:normal;font-display:swap}
 @font-face{font-family:"Caveat";src:url(/fonts/caveat-600.woff2) format("woff2");font-weight:600;font-display:swap}
 @font-face{font-family:"Caveat";src:url(/fonts/caveat-700.woff2) format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Dancing Script";src:url(/fonts/dancing-600.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Courier Prime";src:url(/fonts/courierprime-400.woff2) format("woff2");font-weight:400;font-display:swap}
 
 /* ---------- Tokens ---------- */
 :root{
@@ -168,10 +170,18 @@ h2 .serif{font-size:1.1em}
 .mood .side{display:grid;grid-template-rows:1fr auto;gap:20px}
 .note{background:#fffdf8;border-radius:var(--r-lg);padding:36px;position:relative;box-shadow:inset 0 0 0 1px var(--line);background-image:repeating-linear-gradient(transparent 0 39px,rgba(16,38,27,.07) 39px 40px);background-position:0 70px}
 .note .to{font-size:13px;color:var(--mute)}
-.note .msg{font-family:var(--hand);font-size:40px;line-height:40px;margin-top:22px;color:var(--pen);outline:none;min-height:80px}
+.note .msg{font-family:var(--w-font);font-weight:var(--w-weight);font-style:var(--w-style);font-size:var(--w-size);line-height:40px;margin-top:22px;color:var(--pen);outline:none;min-height:80px}
 .note .msg[contenteditable=true]{background:rgba(212,240,74,.18);border-radius:8px}
-.note .sig{font-family:var(--hand);font-size:30px;text-align:right;margin-top:10px;color:var(--pen)}
-.note .edit{position:absolute;top:26px;right:26px;font-size:13px;font-weight:600;border-bottom:1.5px solid}
+.note .sig{font-family:var(--w-font);font-weight:var(--w-weight);font-style:var(--w-style);font-size:calc(var(--w-size) * .75);text-align:right;margin-top:10px;color:var(--pen)}
+.note-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px -36px -36px;padding:14px 36px;background:#fffdf8;border-top:1px dashed var(--line);border-radius:0 0 var(--r-lg) var(--r-lg)}
+.note .edit{font-size:13px;font-weight:600;border-bottom:1.5px solid;margin-left:auto}
+.scripts{display:flex;gap:6px;flex-wrap:wrap}
+.script{font-family:var(--w-font);font-weight:var(--w-weight);font-style:var(--w-style);font-size:calc(var(--w-size) * .45);line-height:1;padding:7px 12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);color:var(--pen)}
+.script[aria-checked=true]{background:var(--ink);color:#fffdf8;box-shadow:none}
+.w-hand{--w-font:var(--hand);--w-weight:700;--w-style:normal;--w-size:40px}
+.w-script{--w-font:"Dancing Script","Segoe Script",cursive;--w-weight:600;--w-style:normal;--w-size:36px}
+.w-classic{--w-font:var(--serif);--w-weight:400;--w-style:italic;--w-size:34px}
+.w-typed{--w-font:"Courier Prime","Courier New",monospace;--w-weight:400;--w-style:normal;--w-size:25px}
 .pick{background:var(--ink);color:var(--paper);border-radius:var(--r-lg);padding:18px;display:flex;gap:18px;align-items:center}
 .pick .th{width:96px;height:96px;border-radius:18px;overflow:hidden;flex:none}
 .pick .t{flex:1;min-width:0}
@@ -480,7 +490,8 @@ footer{background:var(--ink);color:var(--paper);padding:90px 0 36px;margin-top:4
   .tab{height:42px;padding:0 16px;font-size:14px}
   .tabs{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding-inline:16px;scrollbar-width:none}
   .note{padding:26px}
-  .note .msg{font-size:32px;line-height:40px}
+  .note .msg{font-size:calc(var(--w-size) * .8);line-height:40px}
+  .note-foot{margin:18px -26px -26px;padding:12px 26px}
   .mood .cap{left:24px;right:24px;bottom:24px}
   .pick{flex-wrap:wrap}
   .pick .btn{width:100%}

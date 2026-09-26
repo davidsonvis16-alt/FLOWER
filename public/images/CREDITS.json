@@ -201,5 +201,33 @@
     "creator": "Kelly Ishmael",
     "page": "https://stocksnap.io/photo/book-table-ZDCENMEFW0",
     "license": "CC0"
+  },
+  {
+    "file": "logos/mpesa.svg",
+    "source": "wikimedia",
+    "creator": null,
+    "page": "https://commons.wikimedia.org/wiki/File:M-PESA_LOGO-01.svg",
+    "license": "Trademark of its owner; used to show accepted payment methods"
+  },
+  {
+    "file": "logos/visa.svg",
+    "source": "wikimedia",
+    "creator": null,
+    "page": "https://commons.wikimedia.org/wiki/File:Visa_Inc._logo_(2021–present).svg",
+    "license": "Trademark of its owner; used to show accepted payment methods"
+  },
+  {
+    "file": "logos/mastercard.svg",
+    "source": "wikimedia",
+    "creator": null,
+    "page": "https://commons.wikimedia.org/wiki/File:Mastercard-logo.svg",
+    "license": "Trademark of its owner; used to show accepted payment methods"
+  },
+  {
+    "file": "logos/airtel-money.svg",
+    "source": "wikimedia",
+    "creator": null,
+    "page": "https://commons.wikimedia.org/wiki/File:Airtel_logo.svg",
+    "license": "Trademark of its owner; used to show accepted payment methods"
   }
 ]

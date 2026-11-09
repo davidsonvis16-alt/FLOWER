@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MOODS, PRODUCTS } from '../data.js';
 import { beforeCutoff, img, kes } from '../lib.js';
 import { useShop } from '../shop.jsx';
@@ -14,21 +15,11 @@ const SCRIPTS = [
 export default function Mood() {
   const { addToCart } = useShop();
   const [id, setId] = useState('love');
-  const [shownImg, setShownImg] = useState(MOODS[0].img);
-  const [swapping, setSwapping] = useState(false);
   const [editing, setEditing] = useState(false);
   const [script, setScript] = useState(SCRIPTS[0]);
   const msgRef = useRef();
   const m = MOODS.find(x => x.id === id);
   const p = PRODUCTS.find(x => x.id === m.product);
-
-  // fade the photo out, swap it, fade back in
-  useEffect(() => {
-    if (m.img === shownImg) return;
-    setSwapping(true);
-    const t = setTimeout(() => setShownImg(m.img), 250);
-    return () => clearTimeout(t);
-  }, [m.img]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the card text is contentEditable, so it is written directly rather than rendered
   useEffect(() => { msgRef.current.textContent = m.msg; setEditing(false); }, [m]);
@@ -45,41 +36,44 @@ export default function Mood() {
   };
 
   return (
-    <section id="occasions">
+    <section id="occasions" className="occ">
       <div className="wrap">
-        <div className="sh rv"><h2>What are you<br />trying to <span className="serif">say?</span></h2><p>Pick the feeling. We'll pick the flowers — and draft the card for you.</p></div>
-        <div className="tabs rv" role="tablist" aria-label="Choose a mood">
+        <div className="sh">
+          <h2>What should the card say?</h2>
+          <p>Pick the occasion and we'll suggest a bouquet and a first draft. Change any word, then choose how the florist writes it.</p>
+        </div>
+        <div className="occ-tabs" role="tablist" aria-label="Occasion">
           {MOODS.map(x => (
-            <button key={x.id} className="tab" role="tab" aria-selected={x.id === id} onClick={() => setId(x.id)}>
-              <i className="sw" style={{ background: x.sw }} />{x.label}
+            <button key={x.id} role="tab" aria-selected={x.id === id} onClick={() => setId(x.id)}>
+              {x.label}
+              {x.id === id && <motion.i className="uline" layoutId="occLine" transition={{ type: 'spring', stiffness: 380, damping: 34 }} />}
             </button>
           ))}
         </div>
-        <div className="mood rv">
-          <div className="big">
-            <img src={img(shownImg)} alt={m.desc} className={swapping ? 'swap' : ''} onLoad={() => setSwapping(false)} />
-            <div className="cap"><div className="hand">{m.title}</div><p>{m.desc}</p></div>
-          </div>
-          <div className="side">
-            <div className={'note ' + script.cls}>
-              <span className="to">Card message · written by our florist, by hand</span>
-              <div className="msg" ref={msgRef} contentEditable={editing} suppressContentEditableWarning spellCheck={false} aria-label="Card message" />
-              <div className="sig">{m.sig}</div>
-              <div className="note-foot">
-                <div className="scripts" role="radiogroup" aria-label="Writing style">
-                  {SCRIPTS.map(s => (
-                    <button key={s.id} className={'script ' + s.cls} role="radio" aria-checked={s.id === script.id} onClick={() => setScript(s)}>{s.label}</button>
-                  ))}
-                </div>
-                <button className="edit" onClick={toggleEdit}>{editing ? 'Done' : 'Edit message'}</button>
-              </div>
+        <div className="occ-body">
+          <div className={'note ' + script.cls}>
+            <div className="note-hd">
+              <span>Card · {m.title.replace('.', '')}</span>
+              <button className="link" onClick={toggleEdit}>{editing ? 'Done' : 'Edit the words'}</button>
             </div>
-            <div className="pick">
-              <div className="th"><img src={img(p.img)} alt="" /></div>
-              <div className="t"><small>We'd send</small><b>{p.name}</b><span>{kes(p.price)} · {beforeCutoff() ? 'arrives today by 6pm' : 'arrives tomorrow morning'}</span></div>
-              <button className="btn lime sm" onClick={send}>Send it</button>
+            <div className={'msg' + (editing ? ' editing' : '')} ref={msgRef} contentEditable={editing} suppressContentEditableWarning spellCheck={false} aria-label="Card message" />
+            <div className="sig">{m.sig}</div>
+            <div className="scripts" role="radiogroup" aria-label="Writing style">
+              {SCRIPTS.map(s => (
+                <button key={s.id} className={s.cls} role="radio" aria-checked={s.id === script.id} onClick={() => setScript(s)}>{s.label}</button>
+              ))}
             </div>
           </div>
+          <AnimatePresence mode="wait">
+          <motion.div className="pick" key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35 }}>
+            <div className="th"><img src={img(p.img)} alt={`${p.name}: ${p.desc}`} /></div>
+            <small>Goes with</small>
+            <b>{p.name}</b>
+            <p>{m.desc}</p>
+            <p className="pm">{kes(p.price)} · {beforeCutoff() ? 'can arrive today' : 'arrives tomorrow'}</p>
+            <button className="btn dark sm block" onClick={send}>Add with this card</button>
+          </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </section>

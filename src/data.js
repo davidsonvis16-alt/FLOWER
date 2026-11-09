@@ -12,17 +12,24 @@ export const CONFIG = {
   // A real M-Pesa STK push must run on your server (it needs your Daraja keys).
   // Point this at that route; until then checkout runs in preview mode.
   mpesaEndpoint: '',             // e.g. '/api/mpesa/stk'
+  // Demo mode: sign-in, card and M-Pesa payments are simulated in the browser.
+  demo: true,
+  // demo order tracking: minutes after ordering when an order moves to
+  // "being arranged", "out with rider" and "delivered"
+  statusMinutes: [2, 6, 12],
 };
 
 export const PRODUCTS = [
-  { id: 'noir',      name: 'The Noir',     desc: '24 red roses, black wrap',     price: 4500, img: 'p-noir.jpg',      tag: 'Bestseller',        k: 'roses red romantic love anniversary valentine' },
-  { id: 'sunrise',   name: 'The Sunrise',  desc: 'Gerbera, roses & mums, kraft', price: 3800, img: 'p-sunrise.jpg',   tag: 'Only 6 left today', lime: true, k: 'gerbera orange birthday congrats happy' },
-  { id: 'purewhite', name: 'Pure White',   desc: 'Lilies & lisianthus, vase',    price: 4200, img: 'p-purewhite.jpg', tag: 'Sympathy',          k: 'white lilies sympathy funeral condolence' },
-  { id: 'blush',     name: 'Blush Dreams', desc: '30 pink roses, hand-tied',     price: 3500, img: 'p-blush.jpg',     tag: 'New',               k: 'pink roses sorry apology' },
-  { id: 'wild',      name: 'The Wild One', desc: 'Dahlias, rudbeckia & zinnias', price: 5200, img: 'hero.jpg',        tag: "Florist's pick",    k: 'dahlias rudbeckia zinnias statement big wild' },
-  { id: 'golden',    name: 'Golden Hour',  desc: 'Sunflowers in a glass vase',   price: 3200, img: 'p-golden.jpg',    tag: 'Sunny',             k: 'sunflowers yellow happy congrats' },
-  { id: 'garden',    name: 'Garden Party', desc: 'Dried & fresh wildflowers',    price: 3900, img: 'p-garden.jpg',    tag: '',                  k: 'wildflowers dried mixed just because colourful' },
+  { id: 'noir',      name: 'The Noir',     desc: '24 red roses, black wrap',     price: 4500, img: 'p-noir.jpg',      tag: 'Bestseller',     occ: ['love'],              k: 'roses red romantic love anniversary valentine' },
+  { id: 'sunrise',   name: 'The Sunrise',  desc: 'Gerbera, roses & mums',        price: 3800, img: 'p-sunrise.jpg',   tag: '6 left today',   occ: ['birthday'],          k: 'gerbera orange birthday congrats happy' },
+  { id: 'purewhite', name: 'Pure White',   desc: 'Lilies & lisianthus, vase',    price: 4200, img: 'p-purewhite.jpg', tag: '',               occ: ['sympathy'],          k: 'white lilies sympathy funeral condolence' },
+  { id: 'blush',     name: 'Blush Dreams', desc: '30 pink roses, hand-tied',     price: 3500, img: 'p-blush.jpg',     tag: 'New',            occ: ['love', 'sorry'],     k: 'pink roses sorry apology' },
+  { id: 'wild',      name: 'The Wild One', desc: 'Dahlias, rudbeckia, zinnias',  price: 5200, img: 'hero.jpg',        tag: "Florist's pick", occ: ['birthday', 'just'],  k: 'dahlias rudbeckia zinnias statement big wild' },
+  { id: 'golden',    name: 'Golden Hour',  desc: 'Sunflowers in a glass vase',   price: 3200, img: 'p-golden.jpg',    tag: '',               occ: ['birthday', 'just'],  k: 'sunflowers yellow happy congrats' },
+  { id: 'garden',    name: 'Garden Party', desc: 'Dried & fresh wildflowers',    price: 3900, img: 'p-garden.jpg',    tag: '',               occ: ['just', 'sympathy'],  k: 'wildflowers dried mixed just because colourful' },
+  { id: 'basket',    name: 'Rose Basket',  desc: 'Spray roses in a tin basket',  price: 4800, img: 'g6.jpg',          tag: '',               occ: ['love', 'birthday'],  k: 'pink roses basket birthday gift mum' },
 ];
+export const OCCASIONS = [['all', 'All'], ['love', 'Romance'], ['birthday', 'Birthdays'], ['sorry', 'Apologies'], ['sympathy', 'Sympathy'], ['just', 'Just because']];
 export const SIZES = [['S', 0.8], ['M', 1], ['L', 1.35], ['XL', 1.7]];
 
 export const MOODS = [
@@ -77,14 +84,6 @@ export const ZONES = [
   ['Runda', 550, '4–6pm'], ['Karen', 600, '4–6pm'], ['Langata', 500, '4–6pm'], ['South B', 450, '4–6pm'], ['South C', 450, '4–6pm'],
   ['Ruaka', 650, '4–7pm'], ['Rongai', 750, '4–7pm'], ['Syokimau', 800, '4–7pm'], ['Kitengela', 900, 'next'], ['Thika Road', 650, '4–7pm'],
 ].map(([name, fee, win]) => ({ name, fee, win }));
-
-export const LIVE = [
-  ['Wanjiru', 'The Sunrise', 'her mum', 'Kilimani', 'p-sunrise.jpg'],
-  ['Brian', 'The Noir', 'Faith', 'Westlands', 'p-noir.jpg'],
-  ['Akinyi', 'Pure White', 'the Mwangi family', 'Karen', 'p-purewhite.jpg'],
-  ['Kevin', 'Blush Dreams', 'his sister', 'Lavington', 'p-blush.jpg'],
-  ['Zawadi', 'Golden Hour', 'her team', 'Upper Hill', 'p-golden.jpg'],
-];
 
 export const REVIEWS = [
   { t: '“The flowers were even more beautiful in person. They sent a photo at the door — my mum cried, I cried, the rider nearly cried.”', n: 'Njeri M.', m: 'Kileleshwa · Verified order', img: 'g4.jpg' },

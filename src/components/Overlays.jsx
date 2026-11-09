@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { CONFIG, PRODUCTS, ZONES } from '../data.js';
-import { img, kes, minDeliveryDate, requestMpesaPayment, waLink } from '../lib.js';
-import { useShop } from '../shop.jsx';
+import {
+  STEPS, TEST, beforeCutoff, cardAuthorise, cardBrand, cardConfirm, digits, expiryOk, fmtCard, fmtDate, fmtExpiry, img, isoDay, kes,
+  luhn, minDeliveryDate, mpesaCharge, nbo, normPhone, orderStep, requestMpesaPayment, validEmail, waLink,
+} from '../lib.js';
+import { DEMO, useShop } from '../shop.jsx';
 import { LogoSlot } from './icons.jsx';
 
 export function Scrim() {
@@ -11,37 +15,37 @@ export function Scrim() {
 
 export function Toast() {
   const { toastMsg, toastOn } = useShop();
-  return <div className={'toast' + (toastOn ? ' on' : '')} role="status" aria-live="polite"><i>✓</i><span>{toastMsg}</span></div>;
+  return <div className={'toast' + (toastOn ? ' on' : '')} role="status" aria-live="polite">{toastMsg}</div>;
 }
 
+const DemoNote = ({ children }) => CONFIG.demo ? <p className="demo">Demo · {children}</p> : null;
+
+/* ---------------- Bag ---------------- */
 export function Drawer() {
   const { overlay, open, close, cart, count, subtotal, zone, feeFor, setQty, remove } = useShop();
   const on = overlay === 'drawer';
   const left = Math.max(0, CONFIG.freeDeliveryOver - subtotal);
   const fee = feeFor(zone);
   return (
-    <aside className={'drawer' + (on ? ' open' : '')} aria-label="Your bag" aria-hidden={!on} inert={!on}>
-      <div className="hd"><h3>Your bag <span className="muted" style={{ fontSize: 16, fontWeight: 500 }}>{count ? `(${count})` : ''}</span></h3><button className="ic" onClick={close} aria-label="Close bag">✕</button></div>
+    <aside className={'panel' + (on ? ' open' : '')} aria-label="Your bag" aria-hidden={!on} inert={!on}>
+      <div className="hd"><h3>Bag {count ? `(${count})` : ''}</h3><button className="tl" onClick={close}>Close</button></div>
       <div className="body">
         {!cart.length ? (
           <div className="emptyc">
-            <div className="hand">Your bag is empty.</div>
-            <p className="muted" style={{ margin: '10px 0 22px' }}>Nothing says “I forgot” like an empty bag.</p>
-            <a className="btn dark" href="#shop" onClick={close}>Find something lovely</a>
+            <p>Your bag is empty.</p>
+            <a className="btn dark sm" href="#shop" onClick={close}>See bouquets</a>
           </div>
         ) : (
           <>
-            <div className="free">
-              {left ? <>You're <b>{kes(left)}</b> away from free delivery</> : <><b>You've unlocked free delivery</b> 🎉</>}
-              <div className="bar"><i style={{ width: Math.min(100, subtotal / CONFIG.freeDeliveryOver * 100) + '%' }} /></div>
-            </div>
+            <p className="free">{left ? <>Add {kes(left)} more for free delivery.</> : <>Delivery is free on this order.</>}</p>
             {cart.map(c => (
               <div className="line" key={c.key}>
                 <div className="th"><img src={img(c.img)} alt="" /></div>
                 <div className="inf"><b>{c.name}</b><small>{c.meta}</small>
-                  <div className="q"><button onClick={() => setQty(c.key, -1)} aria-label="Decrease">−</button>{c.qty}<button onClick={() => setQty(c.key, 1)} aria-label="Increase">+</button></div>
+                  <div className="q"><button onClick={() => setQty(c.key, -1)} aria-label="One fewer">−</button>{c.qty}<button onClick={() => setQty(c.key, 1)} aria-label="One more">+</button>
+                    <button className="link" onClick={() => remove(c.key)}>Remove</button></div>
                 </div>
-                <div className="rt"><b>{kes(c.price * c.qty)}</b><button className="rm" onClick={() => remove(c.key)}>Remove</button></div>
+                <b className="rt">{kes(c.price * c.qty)}</b>
               </div>
             ))}
           </>
@@ -50,124 +54,378 @@ export function Drawer() {
       {cart.length > 0 && (
         <div className="ft">
           <div className="sum"><span>Subtotal</span><b>{kes(subtotal)}</b></div>
-          <div className="sum"><span>Delivery <span className="muted">{zone ? `· ${zone}` : ''}</span></span><b>{fee === 0 ? 'Free' : fee == null ? 'from KES 300' : kes(fee)}</b></div>
-          <div className="sum t"><span>Total</span><span>{kes(subtotal + (fee || 0))}</span></div>
-          <button className="btn lime block" onClick={() => open('checkout')}>Checkout</button>
+          <div className="sum"><span>Delivery{zone ? ` · ${zone}` : ''}</span><b>{fee === 0 ? 'Free' : fee == null ? 'from KES 300' : kes(fee)}</b></div>
+          <button className="btn dark block" onClick={() => open('checkout')}>Checkout · {kes(subtotal + (fee || 0))}</button>
         </div>
       )}
     </aside>
   );
 }
 
-const EMPTY = { name: '', phone: '', recipient: '', rphone: '', zone: '', date: '', address: '' };
+/* ---------------- Checkout ---------------- */
+const EMPTY = { name: '', phone: '', email: '', recipient: '', rphone: '', zone: '', date: '', window: '', address: '', note: '' };
+const EMPTY_CARD = { number: '', exp: '', cvc: '', holder: '' };
 const newRef = () => 'PT-' + Math.floor(1000 + Math.random() * 9000);
 
+function windowsFor(zoneName, date) {
+  const z = ZONES.find(x => x.name === zoneName);
+  const today = isoDay(nbo());
+  if (z && date === today && beforeCutoff() && z.win !== 'next') return [z.win];
+  return ['9am–1pm', '2–6pm'];
+}
+
 export function Checkout() {
-  const { overlay, close, cart, subtotal, zone, setZone, feeFor, clearCart } = useShop();
+  const { overlay, close, cart, subtotal, zone, setZone, feeFor, clearCart, user, updateUser, requireAuth, addOrder, track } = useShop();
   const on = overlay === 'checkout';
   const [f, setF] = useState(EMPTY);
+  const [method, setMethod] = useState('mpesa');
+  const [mp, setMp] = useState('');
+  const [card, setCard] = useState(EMPTY_CARD);
+  const [otp, setOtp] = useState('');
   const [err, setErr] = useState('');
-  const [stage, setStage] = useState('form');   // 'form' | 'paying' | 'done'
-  const [info, setInfo] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState('form');   // form | stk | otp | done
+  const [done, setDone] = useState(null);
+  const pending = useRef(null);
 
-  // reset the form each time checkout opens
   useEffect(() => {
     if (!on) return;
+    if (stage === 'done') { setStage('form'); setDone(null); }
     const min = minDeliveryDate();
-    setF(v => ({ ...v, zone: zone || v.zone, date: !v.date || v.date < min ? min : v.date }));
-    setErr(''); setStage('form');
-  }, [on]); // eslint-disable-line react-hooks/exhaustive-deps
+    setF(v => ({
+      ...v,
+      name: v.name || user?.name || '', phone: v.phone || user?.phone || '', email: v.email || user?.email || '',
+      zone: v.zone || zone || user?.address?.zone || '', address: v.address || user?.address?.line || '',
+      date: !v.date || v.date < min ? min : v.date,
+    }));
+    setMp(m => m || user?.phone || '');
+    setErr(''); setBusy(false);
+  }, [on, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const set = k => e => { setF(v => ({ ...v, [k]: e.target.value })); if (k === 'zone' && e.target.value) setZone(e.target.value); };
-  const z = ZONES.find(z => z.name === f.zone);
+  const wins = windowsFor(f.zone, f.date);
+  useEffect(() => { if (!wins.includes(f.window)) setF(v => ({ ...v, window: wins[0] })); }, [wins.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = k => e => { const val = e.target.value; setF(v => ({ ...v, [k]: val })); if (k === 'zone' && val) setZone(val); };
   const fee = feeFor(f.zone);
   const total = subtotal + (fee || 0);
-  const totalLabel = kes(total) + (z || fee === 0 ? '' : ' + delivery');
+  const num = digits(card.number), brand = cardBrand(num);
 
   const validate = () => {
-    const phone = f.phone.replace(/\s|-/g, ''), min = minDeliveryDate();
-    if (!f.name.trim()) return ['Please add your name.'];
-    if (!/^(?:\+?254|0)?[17]\d{8}$/.test(phone)) return ['Enter a valid Safaricom number, e.g. 0712 345 678.'];
-    if (!f.recipient.trim()) return ['Who are the flowers for?'];
-    if (!f.zone) return ['Choose a delivery area.'];
-    if (!f.date || f.date < min) return ['Pick a delivery date from ' + min + '.'];
-    if (!f.address.trim()) return ['Add the street / building so our rider can find it.'];
-    return [null, { ...f, phone: '254' + phone.slice(-9) }];
+    if (!f.recipient.trim()) return 'Who are the flowers for?';
+    if (!f.zone) return 'Choose the delivery area.';
+    if (!f.date || f.date < minDeliveryDate()) return 'Choose a delivery date from ' + fmtDate(minDeliveryDate()) + '.';
+    if (!f.address.trim()) return 'Add the street and building so the rider can find it.';
+    if (f.rphone && !normPhone(f.rphone)) return "The recipient's phone number doesn't look right.";
+    if (!f.name.trim()) return 'Add your name.';
+    if (!normPhone(f.phone)) return 'Add your phone number, e.g. 0712 345 678.';
+    if (f.email && !validEmail(f.email)) return 'That email address looks wrong.';
+    if (method === 'mpesa' && !normPhone(mp)) return 'Enter the M-Pesa number to charge, e.g. 0712 345 678.';
+    if (method === 'card') {
+      if (!luhn(num)) return 'That card number is not valid. Check the digits.';
+      if (!brand) return 'We accept Visa and Mastercard.';
+      if (!expiryOk(card.exp)) return 'Check the expiry date (MM / YY).';
+      if (!/^\d{3,4}$/.test(card.cvc)) return 'The security code is the 3 digits on the back.';
+      if (!card.holder.trim()) return 'Add the name on the card.';
+    }
+    return '';
   };
 
-  const finish = (ref, how) => { setInfo({ ref, how }); setStage('done'); clearCart(); };
+  const place = (how, receipt) => {
+    const ref = newRef();
+    const order = {
+      ref, receipt, email: user?.email || null, placed: Date.now(), date: f.date, window: f.window, zone: f.zone,
+      address: f.address.trim(), recipient: f.recipient.trim(), rphone: f.rphone, note: f.note.trim(), from: f.name.trim(), phone: normPhone(f.phone),
+      items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, meta: c.meta })), subtotal, fee: fee || 0, total, method: how,
+    };
+    addOrder(order);
+    if (user) updateUser({ address: { zone: f.zone, line: f.address.trim() }, phone: user.phone || normPhone(f.phone) });
+    clearCart(); setCard(EMPTY_CARD); setOtp('');
+    setF(v => ({ ...EMPTY, name: v.name, phone: v.phone, email: v.email }));
+    setDone(order); setStage('done');
+  };
 
   const pay = async e => {
     e.preventDefault();
-    const [msg, d] = validate(); setErr(msg || ''); if (msg) return;
-    const ref = newRef();
-    setInfo({ phone: d.phone.replace(/^254/, '0'), amount: total }); setStage('paying');
-    try {
-      await requestMpesaPayment({ phone: d.phone, amount: total, ref, order: d, items: cart });
-      finish(ref, `paid ${kes(total)} via M-Pesa`);
-    } catch (x) {
-      setStage('form'); setErr(x.message || 'Payment did not go through. Try again or send the order on WhatsApp.');
+    const msg = validate(); setErr(msg); if (msg) return;
+    if (method === 'mpesa') {
+      setStage('stk');
+      try {
+        const phone = normPhone(mp);
+        const r = CONFIG.mpesaEndpoint
+          ? await requestMpesaPayment({ phone: '254' + phone.slice(1), amount: total, items: cart })
+          : await mpesaCharge({ phone, amount: total });
+        place('M-Pesa', r.receipt);
+      } catch (x) { setStage('form'); setErr(x.message); }
+    } else {
+      setBusy(true);
+      try {
+        await cardAuthorise({ number: num, amount: total });
+        pending.current = { brand, last4: num.slice(-4) };
+        setStage('otp');
+      } catch (x) { setErr(x.message); }
+      setBusy(false);
     }
   };
 
+  const confirmOtp = async e => {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      const r = await cardConfirm({ otp: otp.trim() });
+      place(`${pending.current.brand} ·· ${pending.current.last4}`, r.receipt);
+    } catch (x) { setErr(x.message); }
+    setBusy(false);
+  };
+
   const sendWhatsApp = () => {
-    const [msg, d] = validate(); setErr(msg || ''); if (msg) return;
+    const msg = validate(); if (msg && !/M-Pesa|card|expiry|security|name on/.test(msg)) { setErr(msg); return; }
     const ref = newRef();
     const text = [
       `New Petal order ${ref}`, '',
-      ...cart.map(c => `• ${c.qty}× ${c.name} — ${kes(c.price * c.qty)}${c.meta ? `\n   ${c.meta}` : ''}`), '',
-      `Total: ${totalLabel}`,
-      `From: ${d.name} (${d.phone})`, `To: ${d.recipient}${d.rphone ? ' (' + d.rphone + ')' : ''}`,
-      `Where: ${d.address}, ${d.zone}`, `When: ${d.date}`,
-    ].join('\n');
+      ...cart.map(c => `• ${c.qty}× ${c.name}: ${kes(c.price * c.qty)}${c.meta ? `\n   ${c.meta}` : ''}`), '',
+      `Total: ${kes(total)}`,
+      `From: ${f.name} (${f.phone})`, `To: ${f.recipient}${f.rphone ? ' (' + f.rphone + ')' : ''}`,
+      `Where: ${f.address}, ${f.zone}`, `When: ${f.date}, ${f.window}`, f.note ? `Note: ${f.note}` : '',
+    ].filter(Boolean).join('\n');
     window.open(waLink(text), '_blank', 'noopener');
-    finish(ref, "sent to us on WhatsApp — we'll confirm payment there");
   };
 
   return (
-    <div className={'modal' + (on ? ' open' : '')} role="dialog" aria-modal="true" aria-labelledby="coTitle" aria-hidden={!on} inert={!on}>
-      <button className="ic x" onClick={close} aria-label="Close">✕</button>
+    <div className={'modal wide' + (on ? ' open' : '')} role="dialog" aria-modal="true" aria-labelledby="coTitle" aria-hidden={!on} inert={!on}>
+      <button className="tl x" onClick={close}>Close</button>
+
       {stage === 'form' && (
-        <div>
-          <h3 id="coTitle">Almost <span className="serif">there.</span></h3>
-          <p className="muted" style={{ marginTop: 8, fontSize: 14 }}>Total <b style={{ color: 'var(--ink)' }}>{totalLabel}</b></p>
-          <form className="frm" noValidate onSubmit={pay}>
-            <div className="row2">
-              <label>Your name<input value={f.name} onChange={set('name')} required autoComplete="name" /></label>
-              <label>M-Pesa number<input value={f.phone} onChange={set('phone')} required inputMode="tel" placeholder="07XX XXX XXX" autoComplete="tel" /></label>
-            </div>
-            <div className="row2">
-              <label>Recipient name<input value={f.recipient} onChange={set('recipient')} required /></label>
-              <label>Recipient phone<input value={f.rphone} onChange={set('rphone')} inputMode="tel" placeholder="Optional" /></label>
-            </div>
-            <div className="row2">
-              <label>Area<select value={f.zone} onChange={set('zone')} required><option value="">Choose area</option>{ZONES.map(z => <option key={z.name}>{z.name}</option>)}</select></label>
-              <label>Delivery date<input type="date" min={minDeliveryDate()} value={f.date} onChange={set('date')} required /></label>
-            </div>
-            <label>Street, building &amp; directions<input value={f.address} onChange={set('address')} required placeholder="e.g. Rose Ave, Apt 4B, gate code…" /></label>
+        <form className="co" noValidate onSubmit={pay}>
+          <div className="co-main">
+            <h3 id="coTitle">Checkout</h3>
+            {!user && <p className="muted small">Ordered before? <button type="button" className="link" onClick={() => requireAuth('checkout')}>Sign in</button> and we'll fill this in. Or carry on as a guest.</p>}
+
+            <fieldset>
+              <legend>Delivery</legend>
+              <div className="row2">
+                <label>Recipient's name<input value={f.recipient} onChange={set('recipient')} /></label>
+                <label>Recipient's phone <span className="opt">optional</span><input value={f.rphone} onChange={set('rphone')} inputMode="tel" placeholder="So the rider can call" /></label>
+              </div>
+              <div className="row3">
+                <label>Area<select value={f.zone} onChange={set('zone')}><option value="">Choose</option>{ZONES.map(z => <option key={z.name}>{z.name}</option>)}</select></label>
+                <label>Date<input type="date" min={minDeliveryDate()} value={f.date} onChange={set('date')} /></label>
+                <label>Time<select value={f.window} onChange={set('window')}>{wins.map(w => <option key={w}>{w}</option>)}</select></label>
+              </div>
+              <label>Street, building and directions<input value={f.address} onChange={set('address')} placeholder="e.g. Rose Ave, Apt 4B, blue gate" /></label>
+              <label>Note for the florist <span className="opt">optional</span><input value={f.note} onChange={set('note')} placeholder="e.g. no lilies, she has cats" maxLength="120" /></label>
+            </fieldset>
+
+            <fieldset>
+              <legend>You</legend>
+              <div className="row3">
+                <label>Name<input value={f.name} onChange={set('name')} autoComplete="name" /></label>
+                <label>Phone<input value={f.phone} onChange={set('phone')} inputMode="tel" placeholder="07XX XXX XXX" autoComplete="tel" /></label>
+                <label>Email <span className="opt">for the receipt</span><input value={f.email} onChange={set('email')} type="email" autoComplete="email" /></label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Payment</legend>
+              <div className="methods" role="radiogroup" aria-label="Payment method">
+                <button type="button" role="radio" aria-checked={method === 'mpesa'} onClick={() => setMethod('mpesa')}><LogoSlot file="mpesa.svg" alt="" text="M-PESA" />M-Pesa</button>
+                <button type="button" role="radio" aria-checked={method === 'card'} onClick={() => setMethod('card')}>
+                  <span className="logos"><LogoSlot file="visa.svg" alt="" text="VISA" /><LogoSlot file="mastercard.svg" alt="" text="MC" /></span>Card</button>
+              </div>
+              {method === 'mpesa' ? (
+                <>
+                  <label>M-Pesa number<input value={mp} onChange={e => setMp(e.target.value)} inputMode="tel" placeholder="07XX XXX XXX" /></label>
+                  <p className="muted small">You'll get a prompt on this phone. Enter your M-Pesa PIN to pay {kes(total)}.</p>
+                  <DemoNote>No money moves. Any number pays; {TEST.mpesaFail.replace(/(\d{4})(\d{3})/, '$1 $2 ')} shows a cancelled payment.</DemoNote>
+                </>
+              ) : (
+                <>
+                  <label>Card number
+                    <span className="cardnum">
+                      <input value={card.number} onChange={e => setCard(c => ({ ...c, number: fmtCard(e.target.value) }))} inputMode="numeric" autoComplete="cc-number" placeholder="1234 5678 9012 3456" />
+                      {brand && <span className="brand">{brand}</span>}
+                    </span>
+                  </label>
+                  <div className="row3">
+                    <label>Expiry<input value={card.exp} onChange={e => setCard(c => ({ ...c, exp: fmtExpiry(e.target.value) }))} inputMode="numeric" autoComplete="cc-exp" placeholder="MM / YY" /></label>
+                    <label>Security code<input value={card.cvc} onChange={e => setCard(c => ({ ...c, cvc: digits(e.target.value).slice(0, 4) }))} inputMode="numeric" autoComplete="cc-csc" placeholder="123" /></label>
+                    <label>Name on card<input value={card.holder} onChange={e => setCard(c => ({ ...c, holder: e.target.value }))} autoComplete="cc-name" /></label>
+                  </div>
+                  <DemoNote>No money moves. Use 4242 4242 4242 4242, any future date and any 3 digits. 4000 0000 0000 0002 is declined.</DemoNote>
+                </>
+              )}
+            </fieldset>
             <p className="err" aria-live="assertive">{err}</p>
-            <div className="mpesa-box"><LogoSlot file="mpesa.svg" alt="M-Pesa" text="M-PESA" />You'll get a prompt on your phone to enter your M-Pesa PIN.</div>
-            <button className="btn lime block" type="submit">Pay with M-Pesa</button>
-            <p className="or">or</p>
-            <button className="btn block" type="button" onClick={sendWhatsApp}>Send order on WhatsApp</button>
-          </form>
-        </div>
+            <button className="btn dark block" type="submit" disabled={busy}>{busy ? 'Contacting your bank…' : `Pay ${kes(total)}`}</button>
+            <button className="link wa-alt" type="button" onClick={sendWhatsApp}>Rather pay on WhatsApp? Send us this order instead.</button>
+          </div>
+
+          <aside className="co-sum">
+            <h4>Order</h4>
+            {cart.map(c => (
+              <div className="sline" key={c.key}>
+                <div className="th"><img src={img(c.img)} alt="" /></div>
+                <div><b>{c.qty} × {c.name}</b><small>{c.meta}</small></div>
+                <span>{kes(c.price * c.qty)}</span>
+              </div>
+            ))}
+            <div className="sum"><span>Subtotal</span><span>{kes(subtotal)}</span></div>
+            <div className="sum"><span>Delivery{f.zone ? ` · ${f.zone}` : ''}</span><span>{fee === 0 ? 'Free' : fee == null ? 'choose area' : kes(fee)}</span></div>
+            <div className="sum t"><span>Total</span><span>{kes(total)}</span></div>
+          </aside>
+        </form>
       )}
-      {stage === 'paying' && (
-        <div className="stk"><div className="ring" /><h3>Check your <span className="serif">phone.</span></h3>
-          <p className="muted" style={{ marginTop: 10 }}>Enter your M-Pesa PIN on <b style={{ color: 'var(--ink)' }}>{info.phone}</b> to pay {kes(info.amount)}.</p></div>
+
+      {stage === 'stk' && (
+        <motion.div className="stk" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}>
+          <h3>Check your phone</h3>
+          <p>We sent an M-Pesa request for <b>{kes(total)}</b> to <b>{normPhone(mp)}</b>. Enter your PIN on the phone to finish.</p>
+          <div className="bar" aria-hidden="true"><i /></div>
+          <p className="muted small">This page updates by itself once the payment goes through.</p>
+        </motion.div>
       )}
-      {stage === 'done' && (
-        <div className="stk"><div className="tick">✓</div><h3>Order <span className="serif">confirmed.</span></h3>
-          <p className="muted" style={{ margin: '10px 0 20px' }}>Ref <b style={{ color: 'var(--ink)' }}>{info.ref}</b> · {info.how}. We'll WhatsApp you a photo when it's delivered.</p>
-          <button className="btn dark" onClick={close}>Done</button></div>
+
+      {stage === 'otp' && (
+        <motion.form className="stk" onSubmit={confirmOtp} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}>
+          <h3>Confirm with your bank</h3>
+          <p>Your bank sent a code by SMS to confirm {kes(total)} on {pending.current?.brand} ending {pending.current?.last4}.</p>
+          <label className="otp">One-time code<input value={otp} onChange={e => setOtp(digits(e.target.value).slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus /></label>
+          <DemoNote>The code is {TEST.otp}.</DemoNote>
+          <p className="err" aria-live="assertive">{err}</p>
+          <button className="btn dark block" type="submit" disabled={busy || otp.length < 6}>{busy ? 'Checking…' : 'Confirm payment'}</button>
+          <button className="link" type="button" onClick={() => { setStage('form'); setErr(''); }}>Use a different card</button>
+        </motion.form>
+      )}
+
+      {stage === 'done' && done && (
+        <motion.div className="stk" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}>
+          <motion.svg className="tick" viewBox="0 0 52 52" aria-hidden="true"><motion.circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" strokeWidth="1.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.6 }} /><motion.path d="M16 27l7 7 14-15" fill="none" stroke="currentColor" strokeWidth="2" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.45, duration: 0.4 }} /></motion.svg>
+          <h3>Thank you, {done.from.split(' ')[0]}</h3>
+          <p>Order <b>{done.ref}</b> is paid ({done.method}, receipt {done.receipt}). {done.recipient} gets it {fmtDate(done.date)}, {done.window}. We'll WhatsApp you a photo at the door.</p>
+          <div className="done-act">
+            <button className="btn dark" onClick={() => track(done.ref)}>Track this order</button>
+            <button className="btn line" onClick={close}>Keep shopping</button>
+          </div>
+          {!user && <p className="muted small">Want this in an order history? <button className="link" onClick={() => requireAuth('account')}>Create an account</button>. Future orders will be saved there.</p>}
+        </motion.div>
       )}
     </div>
   );
 }
 
+/* ---------------- Sign in / create account ---------------- */
+export function Auth() {
+  const { overlay, close, signIn, signUp } = useShop();
+  const on = overlay === 'auth';
+  const [mode, setMode] = useState('in');   // in | up | reset
+  const [v, setV] = useState({ name: '', email: '', phone: '', password: '' });
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (on) { setErr(''); setNote(''); setBusy(false); } }, [on]);
+  const set = k => e => setV(x => ({ ...x, [k]: e.target.value }));
+
+  const submit = async e => {
+    e.preventDefault(); setErr(''); setNote('');
+    if (!validEmail(v.email)) { setErr('Enter a valid email address.'); return; }
+    if (mode === 'reset') { setNote(`If there's an account for ${v.email.trim()}, a reset link is on its way.`); return; }
+    if (mode === 'up') {
+      if (!v.name.trim()) { setErr('Add your name.'); return; }
+      if (!normPhone(v.phone)) { setErr('Add a Kenyan mobile number, e.g. 0712 345 678.'); return; }
+      if (v.password.length < 8) { setErr('Use at least 8 characters for the password.'); return; }
+    } else if (!v.password) { setErr('Enter your password.'); return; }
+    setBusy(true);
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      if (mode === 'up') await signUp({ ...v, phone: normPhone(v.phone) });
+      else await signIn(v.email, v.password);
+      setV({ name: '', email: '', phone: '', password: '' });
+    } catch (x) { setErr(x.message); }
+    setBusy(false);
+  };
+
+  return (
+    <div className={'modal' + (on ? ' open' : '')} role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden={!on} inert={!on}>
+      <button className="tl x" onClick={close}>Close</button>
+      <h3 id="authTitle">{mode === 'up' ? 'Create an account' : mode === 'reset' ? 'Reset your password' : 'Sign in'}</h3>
+      <p className="muted small">{mode === 'reset' ? "We'll email you a link." : 'Faster checkout, your order history and saved dates.'}</p>
+      <form className="frm" noValidate onSubmit={submit}>
+        {mode === 'up' && <label>Name<input value={v.name} onChange={set('name')} autoComplete="name" /></label>}
+        <label>Email<input type="email" value={v.email} onChange={set('email')} autoComplete="email" /></label>
+        {mode === 'up' && <label>Phone<input value={v.phone} onChange={set('phone')} inputMode="tel" placeholder="07XX XXX XXX" autoComplete="tel" /></label>}
+        {mode !== 'reset' && <label>Password<input type="password" value={v.password} onChange={set('password')} autoComplete={mode === 'up' ? 'new-password' : 'current-password'} /></label>}
+        <p className="err" aria-live="assertive">{err}</p>
+        {note && <p className="ok">{note}</p>}
+        <button className="btn dark block" disabled={busy}>{busy ? 'One moment…' : mode === 'up' ? 'Create account' : mode === 'reset' ? 'Send reset link' : 'Sign in'}</button>
+      </form>
+      <div className="auth-alt">
+        {mode === 'in' && <><button className="link" onClick={() => setMode('up')}>New here? Create an account</button><button className="link" onClick={() => setMode('reset')}>Forgot password?</button></>}
+        {mode !== 'in' && <button className="link" onClick={() => setMode('in')}>Back to sign in</button>}
+      </div>
+      {CONFIG.demo && mode === 'in' && (
+        <p className="demo">Demo · accounts are stored in this browser only.{' '}
+          <button className="link" onClick={() => { setV(x => ({ ...x, email: DEMO.email, password: DEMO.password })); setErr(''); }}>Fill in the demo account</button></p>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Account ---------------- */
+export function Account() {
+  const { overlay, close, user, orders, signOut, track, updateUser, toast } = useShop();
+  const on = overlay === 'account' && !!user;
+  const [edit, setEdit] = useState(false);
+  const [p, setP] = useState({ name: '', phone: '' });
+  useEffect(() => { if (on) { setEdit(false); setP({ name: user.name, phone: user.phone || '' }); } }, [on]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!user) return null;
+  const mine = orders.filter(o => o.email === user.email).sort((a, b) => b.placed - a.placed);
+
+  const save = e => {
+    e.preventDefault();
+    if (!p.name.trim() || !normPhone(p.phone)) { toast('Add a name and a valid phone number'); return; }
+    updateUser({ name: p.name.trim(), phone: normPhone(p.phone) }); setEdit(false); toast('Details saved');
+  };
+
+  return (
+    <aside className={'panel' + (on ? ' open' : '')} aria-label="Your account" aria-hidden={!on} inert={!on}>
+      <div className="hd"><h3>{user.name}</h3><button className="tl" onClick={close}>Close</button></div>
+      <div className="body">
+        <div className="acc-block">
+          {edit ? (
+            <form className="frm" onSubmit={save}>
+              <label>Name<input value={p.name} onChange={e => setP(x => ({ ...x, name: e.target.value }))} /></label>
+              <label>Phone<input value={p.phone} onChange={e => setP(x => ({ ...x, phone: e.target.value }))} inputMode="tel" /></label>
+              <div className="done-act"><button className="btn dark sm">Save</button><button type="button" className="link" onClick={() => setEdit(false)}>Cancel</button></div>
+            </form>
+          ) : (
+            <>
+              <p>{user.email}<br />{user.phone || 'No phone yet'}</p>
+              {user.address && <p className="muted small">Last delivered to {user.address.line}, {user.address.zone}</p>}
+              <button className="link" onClick={() => setEdit(true)}>Edit details</button>
+            </>
+          )}
+        </div>
+
+        <h4 className="acc-h">Orders</h4>
+        {!mine.length && <p className="muted small">No orders yet. They'll appear here after checkout.</p>}
+        {mine.map(o => {
+          const step = orderStep(o);
+          return (
+            <div className="acc-order" key={o.ref}>
+              <div className="ao-top"><b>{o.ref}</b><span className={'st-pill s' + step}>{STEPS[step]}</span></div>
+              <p>{o.items.map(i => `${i.qty} × ${i.name}`).join(', ')}</p>
+              <p className="muted small">For {o.recipient} · {o.zone} · {fmtDate(o.date)}, {o.window} · {kes(o.total)} by {o.method}</p>
+              {step < 3 && <button className="link" onClick={() => track(o.ref)}>Track</button>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="ft"><button className="btn line block" onClick={signOut}>Sign out</button></div>
+    </aside>
+  );
+}
+
+/* ---------------- Search & saved ---------------- */
 export function SearchOverlay() {
-  const { overlay, close, wish, toast } = useShop();
+  const { overlay, close, wish } = useShop();
   const on = overlay === 'search' || overlay === 'wish';
   const onlyWish = overlay === 'wish';
   const [q, setQ] = useState('');
@@ -176,9 +434,8 @@ export function SearchOverlay() {
   useEffect(() => {
     if (!on) return;
     setQ('');
-    if (onlyWish) toast(wish.size ? `${wish.size} saved bouquet${wish.size > 1 ? 's' : ''}` : 'No favourites yet');
-    else { const t = setTimeout(() => input.current.focus(), 300); return () => clearTimeout(t); }
-  }, [on, onlyWish]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!onlyWish) { const t = setTimeout(() => input.current.focus(), 200); return () => clearTimeout(t); }
+  }, [on, onlyWish]);
 
   const term = q.trim().toLowerCase();
   let list = PRODUCTS.filter(p => !term || (p.name + ' ' + p.desc + ' ' + p.k).toLowerCase().includes(term));
@@ -186,20 +443,16 @@ export function SearchOverlay() {
 
   const go = (e, id) => {
     e.preventDefault(); close();
-    const card = document.getElementById('p-' + id);
-    document.getElementById('shop').scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => {
-      card.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
-      card.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 700, delay: 500 });
-    }, 400);
+    setTimeout(() => document.getElementById('p-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
 
   return (
     <div className={'sover' + (on ? ' open' : '')} aria-hidden={!on} inert={!on}>
       <div className="wrap">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div className="inp" style={{ flex: 1 }}><label className="sr" htmlFor="sInput">Search</label><input id="sInput" ref={input} value={q} onChange={e => setQ(e.target.value)} placeholder="Search roses, sunflowers, sympathy…" /></div>
-          <button className="ic" onClick={close} aria-label="Close search">✕</button>
+        <div className="s-row">
+          <label className="sr" htmlFor="sInput">Search</label>
+          <input id="sInput" ref={input} value={q} onChange={e => setQ(e.target.value)} placeholder="Roses, sunflowers, sympathy…" />
+          <button className="tl" onClick={close}>Close</button>
         </div>
         <div className="sres">
           {list.length ? list.map(p => (
@@ -207,9 +460,7 @@ export function SearchOverlay() {
               <div className="th"><img src={img(p.img)} alt="" /></div>
               <div><b>{p.name}</b><small>{p.desc} · {kes(p.price)}</small></div>
             </a>
-          )) : (
-            <p className="muted">{onlyWish && !term ? 'No favourites yet — tap the ♡ on any bouquet.' : <>Nothing matches “{q}”. Try <b>roses</b> or <b>sunflowers</b>, or build your own.</>}</p>
-          )}
+          )) : <p className="muted">Nothing matches “{q}”. Try roses or sunflowers, or build your own.</p>}
         </div>
       </div>
     </div>

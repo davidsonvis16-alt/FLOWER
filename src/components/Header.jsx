@@ -2,72 +2,49 @@ import { useEffect, useState } from 'react';
 import { CONFIG } from '../data.js';
 import { nbo, waLink } from '../lib.js';
 import { useShop } from '../shop.jsx';
-import { Bag, Burger, Heart, Search, User } from './icons.jsx';
 
-const LINKS = [['shop', 'Shop'], ['occasions', 'Occasions'], ['build', 'Build a bouquet'], ['club', 'Petal Club'], ['delivery', 'Delivery']];
+const LINKS = [['shop', 'Bouquets'], ['occasions', 'Occasions'], ['build', 'Build your own'], ['club', 'Subscriptions'], ['delivery', 'Delivery']];
 
-function useCountdown() {
+// minutes left before the same-day cutoff; updates once a minute
+function useCutoff() {
   const calc = () => {
     const n = nbo(), cut = new Date(n); cut.setUTCHours(CONFIG.cutoffHour, 0, 0, 0);
-    if (n >= cut) return null;
-    const s = Math.floor((cut - n) / 1000), p = v => String(v).padStart(2, '0');
-    return `${p(Math.floor(s / 3600))}:${p(Math.floor(s % 3600 / 60))}:${p(s % 60)}`;
+    return n >= cut ? null : Math.ceil((cut - n) / 60000);
   };
   const [left, setLeft] = useState(calc);
-  useEffect(() => { const t = setInterval(() => setLeft(calc()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setLeft(calc()), 30000); return () => clearInterval(t); }, []);
   return left;
 }
 
 export function TopBar() {
-  const left = useCountdown();
+  const left = useCutoff();
+  const h = left && Math.floor(left / 60), m = left && left % 60;
   return (
-    <div className="top" role="region" aria-label="Delivery cutoff">
+    <div className="top">
       <div className="wrap">
-        <span>
-          <span className="dot" />
-          {left
-            ? <>Order in <span className="cd">{left}</span> for same-day delivery anywhere in Nairobi</>
-            : <>Same-day cutoff has passed — <b>order now for delivery tomorrow from 9am</b></>}
-        </span>
-        <span className="r">Free delivery over KES {CONFIG.freeDeliveryOver.toLocaleString()} &nbsp;·&nbsp; Pay with M-Pesa at checkout</span>
+        <span>{left
+          ? <>Same-day delivery for orders in the next <b>{h ? `${h} h ` : ''}{m} min</b></>
+          : <>Orders placed now arrive tomorrow from 9am</>}</span>
+        <span className="r">Free delivery over KES {CONFIG.freeDeliveryOver.toLocaleString()}</span>
       </div>
     </div>
   );
 }
 
 export function Nav() {
-  const { open, count, wish, bump } = useShop();
-  const [scrolled, setScrolled] = useState(false);
-  const [active, setActive] = useState('shop');
-
-  useEffect(() => {
-    const onScroll = () => {
-      setScrolled(scrollY > 10);
-      let cur = LINKS[0][0];
-      LINKS.forEach(([id]) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top < 160) cur = id; });
-      setActive(cur);
-    };
-    addEventListener('scroll', onScroll, { passive: true });
-    return () => removeEventListener('scroll', onScroll);
-  }, []);
-
+  const { open, count, user } = useShop();
   return (
-    <header className={'nav' + (scrolled ? ' scrolled' : '')}>
+    <header className="nav">
       <div className="wrap">
+        <a href="#top" className="logo" aria-label="Petal, home">Petal</a>
         <nav className="links" aria-label="Main">
-          {LINKS.map(([id, l]) => <a key={id} href={'#' + id} className={active === id ? 'on' : ''}>{l}</a>)}
+          {LINKS.map(([id, l]) => <a key={id} href={'#' + id}>{l}</a>)}
         </nav>
-        <button className="ic burger" onClick={() => open('menu')} aria-label="Open menu"><Burger /></button>
-        <a href="#top" className="logo" aria-label="Petal home">Petal<i>.</i></a>
         <div className="nr">
-          <button className="search" onClick={() => open('search')} aria-label="Search bouquets"><Search /><span>Search “sunflowers”</span></button>
-          <a className="ic acct" href="#reminders" aria-label="Your reminders"><User /></a>
-          <button className="ic" onClick={() => open('wish')} aria-label="Wishlist">
-            <Heart />{wish.size > 0 && <span className="badge">{wish.size}</span>}
-          </button>
-          <button className="ic fill" onClick={() => open('drawer')} aria-label="Open bag">
-            <Bag /><span key={bump} className={'badge' + (bump ? ' bump' : '')}>{count}</span>
-          </button>
+          <button className="tl" onClick={() => open('search')}>Search</button>
+          <button className="tl" onClick={() => open(user ? 'account' : 'auth')}>{user ? user.name.split(' ')[0] : 'Sign in'}</button>
+          <button className="tl bag" onClick={() => open('drawer')}>Bag <span className="n">{count}</span></button>
+          <button className="tl burger" onClick={() => open('menu')} aria-label="Open menu">Menu</button>
         </div>
       </div>
     </header>
@@ -75,18 +52,19 @@ export function Nav() {
 }
 
 export function MobileMenu() {
-  const { overlay, close } = useShop();
+  const { overlay, close, open, user } = useShop();
   const on = overlay === 'menu';
   return (
     <div className={'mmenu' + (on ? ' open' : '')} aria-hidden={!on} inert={!on}>
       <div className="hd">
-        <span className="logo" style={{ color: 'var(--paper)' }}>Petal<i>.</i></span>
-        <button className="ic" onClick={close} aria-label="Close menu">✕</button>
+        <span className="logo">Petal</span>
+        <button className="tl" onClick={close}>Close</button>
       </div>
       <nav aria-label="Mobile">
-        {[...LINKS, ['reminders', 'Reminders']].map(([id, l]) => <a key={id} href={'#' + id} onClick={close}>{l}</a>)}
+        {[...LINKS, ['track', 'Track an order'], ['reminders', 'Reminders']].map(([id, l]) => <a key={id} href={'#' + id} onClick={close}>{l}</a>)}
+        <button onClick={() => open(user ? 'account' : 'auth')}>{user ? 'Your account' : 'Sign in'}</button>
       </nav>
-      <a className="wa" href={waLink("Hi Petal! I'd like to order flowers.")} target="_blank" rel="noopener" style={{ marginTop: 'auto', alignSelf: 'flex-start' }}>Chat on WhatsApp</a>
+      <a className="btn line" href={waLink("Hi Petal! I'd like to order flowers.")} target="_blank" rel="noopener">WhatsApp us</a>
     </div>
   );
 }
